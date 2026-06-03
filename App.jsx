@@ -7,37 +7,8 @@ const doctors = [
   { id: 4, name: "Dr. Kabir Khan", department: "Neurology" },
 ];
 
-const initialAppointments = [
-  {
-    id: 101,
-    patientName: "Amit Verma",
-    phone: "9876543210",
-    doctorId: 1,
-    date: "2026-06-05",
-    time: "10:30",
-    reason: "Chest pain consultation",
-    status: "Scheduled",
-  },
-  {
-    id: 102,
-    patientName: "Neha Singh",
-    phone: "9123456780",
-    doctorId: 3,
-    date: "2026-06-06",
-    time: "14:00",
-    reason: "Skin allergy",
-    status: "Completed",
-  },
-];
-
 export default function App() {
-  const [appointments, setAppointments] = useState(initialAppointments);
-  useEffect(() => {
-  fetch("http://localhost:5000/appointments")
-    .then((response) => response.json())
-    .then((data) => setAppointments(data))
-    .catch((error) => console.error("Error loading appointments:", error));
-}, []);
+  const [appointments, setAppointments] = useState([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
 
@@ -50,19 +21,34 @@ export default function App() {
     reason: "",
   });
 
+  useEffect(() => {
+    fetch("http://localhost:5000/appointments")
+      .then((response) => response.json())
+      .then((data) => setAppointments(data))
+      .catch((error) => console.error("Error loading appointments:", error));
+  }, []);
+
   const departments = ["All", ...new Set(doctors.map((doctor) => doctor.department))];
 
   const filteredAppointments = useMemo(() => {
     return appointments.filter((appointment) => {
-      const doctor = doctors.find((item) => item.id === appointment.doctorId);
+      const doctorName =
+        appointment.doctorName ||
+        doctors.find((item) => item.id === appointment.doctorId)?.name ||
+        "";
+
+      const department =
+        appointment.department ||
+        doctors.find((item) => item.id === appointment.doctorId)?.department ||
+        "";
 
       const matchesSearch =
         appointment.patientName.toLowerCase().includes(search.toLowerCase()) ||
         appointment.phone.includes(search) ||
-        doctor?.name.toLowerCase().includes(search.toLowerCase());
+        doctorName.toLowerCase().includes(search.toLowerCase());
 
       const matchesDepartment =
-        departmentFilter === "All" || doctor?.department === departmentFilter;
+        departmentFilter === "All" || department === departmentFilter;
 
       return matchesSearch && matchesDepartment;
     });
@@ -88,46 +74,75 @@ export default function App() {
       return;
     }
 
+    const selectedDoctor = doctors.find(
+      (doctor) => doctor.id === Number(form.doctorId)
+    );
+
     const newAppointment = {
-      id: Date.now(),
-      ...form,
-      doctorId: Number(form.doctorId),
-      status: "Scheduled",
+      patientName: form.patientName,
+      phone: form.phone,
+      doctorName: selectedDoctor.name,
+      department: selectedDoctor.department,
+      date: form.date,
+      time: form.time,
+      reason: form.reason,
     };
 
-   fetch("http://localhost:5000/appointments", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(newAppointment),
-})
-  .then((response) => response.json())
-  .then(() => {
-    setAppointments((prev) => [newAppointment, ...prev]);
-  })
-  .catch((error) => console.error("Error adding appointment:", error));
+    fetch("http://localhost:5000/appointments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(newAppointment),
+    })
+      .then((response) => response.json())
+      .then((savedAppointment) => {
+        setAppointments((prev) => [savedAppointment, ...prev]);
 
-    setForm({
-      patientName: "",
-      phone: "",
-      doctorId: "",
-      date: "",
-      time: "",
-      reason: "",
-    });
+        setForm({
+          patientName: "",
+          phone: "",
+          doctorId: "",
+          date: "",
+          time: "",
+          reason: "",
+        });
+
+        alert("Appointment saved to MySQL database");
+      })
+      .catch((error) => console.error("Error adding appointment:", error));
   }
 
   function updateStatus(id, status) {
-    setAppointments((prev) =>
-      prev.map((appointment) =>
-        appointment.id === id ? { ...appointment, status } : appointment
-      )
-    );
+    fetch(`http://localhost:5000/appointments/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status }),
+    })
+      .then((response) => response.json())
+      .then(() => {
+        setAppointments((prev) =>
+          prev.map((appointment) =>
+            appointment.id === id ? { ...appointment, status } : appointment
+          )
+        );
+      })
+      .catch((error) => console.error("Error updating appointment:", error));
   }
 
   function deleteAppointment(id) {
-    setAppointments((prev) => prev.filter((appointment) => appointment.id !== id));
+    fetch(`http://localhost:5000/appointments/${id}`, {
+      method: "DELETE",
+    })
+      .then((response) => response.json())
+      .then(() => {
+        setAppointments((prev) =>
+          prev.filter((appointment) => appointment.id !== id)
+        );
+      })
+      .catch((error) => console.error("Error deleting appointment:", error));
   }
 
   return (
@@ -249,7 +264,14 @@ export default function App() {
               <p className="empty">No appointments found.</p>
             ) : (
               filteredAppointments.map((appointment) => {
-                const doctor = doctors.find((item) => item.id === appointment.doctorId);
+                const doctorName =
+                  appointment.doctorName ||
+                  doctors.find((item) => item.id === appointment.doctorId)?.name;
+
+                const department =
+                  appointment.department ||
+                  doctors.find((item) => item.id === appointment.doctorId)
+                    ?.department;
 
                 return (
                   <article className="appointment-card" key={appointment.id}>
@@ -259,8 +281,8 @@ export default function App() {
                     </div>
 
                     <div>
-                      <strong>{doctor?.name}</strong>
-                      <p>{doctor?.department}</p>
+                      <strong>{doctorName}</strong>
+                      <p>{department}</p>
                     </div>
 
                     <div>
