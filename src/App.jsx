@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API = "http://localhost:5000";
+const API = "https://hospital-appointment-management-system-2.onrender.com";
 
 const healthIssues = [
   "Regular Checkup",
